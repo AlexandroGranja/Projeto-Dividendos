@@ -74,7 +74,7 @@ if uploaded_file is not None:
             st.error("O arquivo deve conter as colunas 'Ticker' e 'Peso'.")
             CARTEIRA_ACOES = {} # Limpa a carteira em caso de colunas inválidas
 
-            st.session_state.ia_report_text = response.text # Salva o texto do relatório na sessão
+            
 
     except Exception as e:
         st.error(f"Erro ao ler o arquivo: {e}. Verifique o formato e as colunas.")
@@ -481,6 +481,7 @@ if st.button("Atualizar Análise e Sugestões de IA"): # Botão com novo texto
             try:
                 response = model.generate_content(prompt)
                 st.markdown(response.text)
+                st.session_state.ia_report_text = response.text
             except Exception as e:
                 st.error(f"Erro ao chamar a IA: {e}")
                 st.warning("Verifique sua chave de API e se há limites de uso ou se o modelo está acessível.")
