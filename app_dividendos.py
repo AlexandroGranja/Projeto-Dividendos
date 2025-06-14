@@ -112,6 +112,8 @@ with st.spinner("Carregando dados das ações da carteira..."):
             # Calcular Dividend Yield (últimos 12 meses)
             hoje = datetime.now()
             um_ano_atras = hoje - timedelta(days=365)
+            if dividends.index.tz is not None:
+                dividends.index = dividends.index.tz_localize(None)
             # Garantir que a seleção de datas do dividends não falhe se não houver dados no ano
             dividends_12m = dividends[(dividends.index >= um_ano_atras) & (dividends.index <= hoje)].sum()
             
