@@ -90,6 +90,46 @@ def buscar_dados_acao(ticker):
     dividends = acao.dividends
     return info, hist, dividends
 
+# --- Função para calcular o crescimento anual de dividendos (CAGR) ---
+def calcular_crescimento_dividendos(dividends_series, years):
+    if dividends_series.empty or len(dividends_series) < 2:
+        return "N/A" # Não há dados suficientes para calcular crescimento
+
+    # Certifique-se que o índice está como datetime e é tz-naive
+    if dividends_series.index.tz is not None:
+        dividends_series = dividends_series.tz_localize(None)
+
+    hoje = datetime.now()
+    inicio_periodo = hoje - timedelta(days=years * 365) # Calcula a data de início do período
+
+    # Filtra os dividendos dentro do período desejado
+    dividends_no_periodo = dividends_series[dividends_series.index >= inicio_periodo]
+
+    if dividends_no_periodo.empty:
+        return "N/A" # Nenhum dividendo no período
+
+    # Encontra o primeiro e o último ano com dividendos no período
+    # Garante que temos pelo menos um ano completo de diferença para calcular CAGR
+    primeiro_ano_com_dividendo = dividends_no_periodo.index.min().year
+    ultimo_ano_com_dividendo = dividends_no_periodo.index.max().year
+
+    # Soma os dividendos do primeiro e último ano com dados
+    total_dividendo_inicio = dividends_no_periodo[dividends_no_periodo.index.year == primeiro_ano_com_dividendo].sum()
+    total_dividendo_fim = dividends_no_periodo[dividends_no_periodo.index.year == ultimo_ano_com_dividendo].sum()
+
+    # Evita divisão por zero ou log de zero/negativo, ou período muito curto
+    if total_dividendo_inicio <= 0 or total_dividendo_fim <= 0 or (ultimo_ano_com_dividendo - primeiro_ano_com_dividendo) < 1:
+        return "N/A"
+
+    num_periodos = ultimo_ano_com_dividendo - primeiro_ano_com_dividendo
+
+    if num_periodos > 0:
+        # Fórmula do CAGR: ((Valor Final / Valor Inicial)^(1 / Num Períodos)) - 1
+        cagr = ((total_dividendo_fim / total_dividendo_inicio) ** (1 / num_periodos)) - 1
+        return f"{cagr * 100:.2f}%"
+    else:
+        return "N/A" # Apenas um ano de dados no período, não dá pra calcular crescimento
+
 # --- Carregar dados da carteira ---
 st.subheader("Composição da Carteira")
 dados_carteira = []
@@ -151,6 +191,11 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 else:
                     market_cap_display = f"R$ {market_cap:,.2f}" # Para valores menores
 
+             # --- NOVAS MÉTRICAS DE CRESCIMENTO DE DIVIDENDOS AQUI ---
+            # Calcula o crescimento para 3 e 5 anos
+            crescimento_dy_3a = calcular_crescimento_dividendos(dividends, 3)
+            crescimento_dy_5a = calcular_crescimento_dividendos(dividends, 5)
+
             dados_carteira.append({
                 "Companhia": nome_acao,
                 "Ticker": ticker,
@@ -158,10 +203,12 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 "Setor": setor_acao,
                 "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A",
                 "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A",
-                "P/L": pl_display,         # <-- NOVA COLUNA
-                "P/VP": pvp_display,       # <-- NOVA COLUNA
-                "ROE": roe_display,        # <-- NOVA COLUNA
-                "Market Cap": market_cap_display # <-- NOVA COLUNA
+                "P/L": pl_display,
+                "P/VP": pvp_display,
+                "ROE": roe_display,
+                "Market Cap": market_cap_display,
+                "Cresc. DY (3a)": crescimento_dy_3a, # <-- NOVA COLUNA AQUI
+                "Cresc. DY (5a)": crescimento_dy_5a  # <-- NOVA COLUNA AQUI
             })
         except Exception as e:
             st.warning(f"Não foi possível carregar dados para {ticker}: {e}")
@@ -173,10 +220,12 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 "Setor": "N/A (Erro ao carregar)",
                 "Dividend Yield": "N/A (Erro)",
                 "Preço Atual": "N/A (Erro)",
-                "P/L": "N/A (Erro)",         # <-- Adicione aqui também!
-                "P/VP": "N/A (Erro)",       # <-- Adicione aqui também!
-                "ROE": "N/A (Erro)",        # <-- Adicione aqui também!
-                "Market Cap": "N/A (Erro)" # <-- Adicione aqui também!
+                "P/L": "N/A (Erro)",
+                "P/VP": "N/A (Erro)",
+                "ROE": "N/A (Erro)",
+                "Market Cap": "N/A (Erro)",
+                "Cresc. DY (3a)": "N/A (Erro)", # <-- Adicione aqui também!
+                "Cresc. DY (5a)": "N/A (Erro)"  # <-- Adicione aqui também!
             })
 
 df_carteira = pd.DataFrame(dados_carteira)
