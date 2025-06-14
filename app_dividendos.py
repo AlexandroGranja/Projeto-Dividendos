@@ -304,6 +304,37 @@ if dividend_yields_dict: # Verifica se o dicionário de DYs não está vazio
 else:
     st.warning("Não há dados de Dividend Yield individual para gerar o gráfico.")
 
+# --- Sugestão de Rebalanceamento da Carteira (Pesos Iguais) ---
+st.subheader("Sugestão de Rebalanceamento (Pesos Iguais)")
+
+if not df_carteira.empty:
+    num_acoes = len(df_carteira)
+    if num_acoes > 0:
+        peso_ideal_igual = 1.0 / num_acoes # Calcula o peso igual para cada ação
+        
+        # Cria um DataFrame para a sugestão de rebalanceamento
+        df_rebalanceamento = df_carteira[['Companhia', 'Ticker', 'Peso']].copy()
+        df_rebalanceamento['Peso Atual (%)'] = df_rebalanceamento['Peso'].str.replace('%', '').astype(float)
+        df_rebalanceamento['Peso Sugerido (%)'] = peso_ideal_igual * 100
+        
+        # Calcula a diferença para rebalancear
+        df_rebalanceamento['Diferença (%)'] = df_rebalanceamento['Peso Sugerido (%)'] - df_rebalanceamento['Peso Atual (%)']
+        
+        st.write("Aqui está uma sugestão de como rebalancear sua carteira para que cada ação tenha um peso igual:")
+        st.dataframe(df_rebalanceamento[['Companhia', 'Ticker', 'Peso Atual (%)', 'Peso Sugerido (%)', 'Diferença (%)']], use_container_width=True)
+
+        st.info(f"**Rebalanceamento para pesos iguais**: Cada uma das {num_acoes} ações teria um peso de {peso_ideal_igual*100:.2f}% na carteira.")
+        st.markdown(
+            """
+            * **Diferença (%) positiva:** Você precisaria **aumentar** a posição nesta ação.
+            * **Diferença (%) negativa:** Você precisaria **diminuir** a posição nesta ação.
+            """
+        )
+    else:
+        st.warning("Não há ações na carteira para sugerir um rebalanceamento.")
+else:
+    st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
+
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
