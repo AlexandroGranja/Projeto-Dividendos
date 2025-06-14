@@ -335,6 +335,49 @@ if not df_carteira.empty:
 else:
     st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
 
+    # Continuação do bloco 'Sugestão de Rebalanceamento'
+if not df_carteira.empty:
+    num_acoes = len(df_carteira)
+    if num_acoes > 0:
+        peso_ideal_igual = 1.0 / num_acoes
+        
+        df_rebalanceamento = df_carteira[['Companhia', 'Ticker', 'Peso']].copy()
+        df_rebalanceamento['Peso Atual (%)'] = df_rebalanceamento['Peso'].str.replace('%', '').astype(float)
+        df_rebalanceamento['Peso Sugerido (%)'] = peso_ideal_igual * 100
+        df_rebalanceamento['Diferença (%)'] = df_rebalanceamento['Peso Sugerido (%)'] - df_rebalanceamento['Peso Atual (%)']
+        
+        st.write("Aqui está uma sugestão de como rebalancear sua carteira para que cada ação tenha um peso igual:")
+        st.dataframe(df_rebalanceamento[['Companhia', 'Ticker', 'Peso Atual (%)', 'Peso Sugerido (%)', 'Diferença (%)']], use_container_width=True)
+
+        st.info(f"**Rebalanceamento para pesos iguais**: Cada uma das {num_acoes} ações teria um peso de {peso_ideal_igual*100:.2f}% na carteira.")
+        st.markdown(
+            """
+            * **Diferença (%) positiva:** Você precisaria **aumentar** a posição nesta ação.
+            * **Diferença (%) negativa:** Você precisaria **diminuir** a posição nesta ação.
+            """
+        )
+
+        # --- Ilustração do Máximo Dividend Yield Teórico ---
+        st.subheader("Análise de Maximização de Dividend Yield (Teórico)")
+        if dividend_yields_dict:
+            # Encontra a ação com o maior Dividend Yield
+            ticker_maior_dy = max(dividend_yields_dict, key=dividend_yields_dict.get)
+            dy_maior_dy = dividend_yields_dict[ticker_maior_dy]
+
+            st.markdown(f"""
+            Para fins de ilustração teórica de maximização de Dividend Yield, se toda a sua carteira fosse alocada em apenas uma ação (concentração de 100% em um único ativo), a ação com o maior Dividend Yield atual é **{ticker_maior_dy}** com **{dy_maior_dy:.2f}%**.
+            """)
+            st.warning("""
+            **Atenção:** Concentrar 100% da carteira em uma única ação aumenta drasticamente o risco do seu portfólio e não é uma estratégia de investimento recomendada por profissionais financeiros para a maioria dos investidores. Esta é uma informação meramente ilustrativa.
+            """)
+        else:
+            st.warning("Não há dados de Dividend Yield para calcular a maximização teórica.")
+
+    else:
+        st.warning("Não há ações na carteira para sugerir um rebalanceamento.")
+else:
+    st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
+
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
