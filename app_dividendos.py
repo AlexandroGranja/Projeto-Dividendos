@@ -80,7 +80,7 @@ if not CARTEIRA_ACOES: # Se a carteira ainda estiver vazia após o upload
 
 
 # --- Função para buscar dados de ações ---
-@st.cache_data
+@st.cache_data(ttl=timedelta(hours=6))
 def buscar_dados_acao(ticker):
     acao = yf.Ticker(ticker)
     info = acao.info
@@ -153,11 +153,11 @@ st.dataframe(df_carteira_sorted, use_container_width=True)
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
     carteira_markdown = df_carteira.to_markdown(index=False)
-    
+
     # Adicionar o Dividend Yield individual no formato do prompt
     dy_individual_str = "\n".join([f"- {ticker}: {dy:.2f}%" for ticker, dy in dividend_yields_dict.items()])
 
-    # Calcular o DY médio ponderado da carteira
+    # ... (o cálculo do dy_ponderado_final deve vir aqui, como já está no seu código) ...
     dy_ponderado = 0
     total_peso = 0
     # Converta a coluna 'Peso' para float antes de usar, pois ela vem como string "X%"
@@ -167,7 +167,7 @@ def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     for index, row in df_temp.iterrows():
         ticker = row['Ticker']
         peso = row['Peso_Decimal']
-        
+
         if ticker in dividend_yields_dict:
             dy = dividend_yields_dict[ticker]
             dy_ponderado += dy * peso
@@ -180,6 +180,8 @@ def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
 
     prompt_content = f"""
     Eu sou um investidor focado em dividendos. Por favor, analise a seguinte carteira de ações e me forneça insights e possíveis sugestões.
+
+    **Data da Análise:** {datetime.now().strftime("%d de %B de %Y")} # <--- ADICIONE ESTA LINHA AQUI!
 
     **Composição Atual da Carteira (e seus pesos normalizados):**
     {carteira_markdown}
