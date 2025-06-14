@@ -232,6 +232,49 @@ df_carteira = pd.DataFrame(dados_carteira)
 df_carteira_sorted = df_carteira.sort_values(by="Companhia").reset_index(drop=True)
 st.dataframe(df_carteira_sorted, use_container_width=True)
 
+# --- Gráfico de Diversificação Setorial ---
+st.subheader("Diversificação Setorial da Carteira")
+
+if not df_carteira_sorted.empty:
+    # Para o gráfico, precisamos do peso em formato numérico
+    # Use a coluna 'Peso_Decimal' que já criamos para o prompt da IA, se ela estiver disponível
+    # Caso contrário, crie-a aqui
+    if 'Peso_Decimal' not in df_carteira_sorted.columns:
+        df_carteira_sorted['Peso_Decimal'] = df_carteira_sorted['Peso'].str.replace('%', '').astype(float) / 100
+
+    # Agrupa por setor e soma os pesos
+    df_setores = df_carteira_sorted.groupby('Setor')['Peso_Decimal'].sum().reset_index()
+    df_setores.columns = ['Setor', 'Peso Total']
+
+    # Filtra setores com peso zero (se houver, para não aparecer no gráfico)
+    df_setores = df_setores[df_setores['Peso Total'] > 0]
+
+    if not df_setores.empty:
+        fig_setor, ax_setor = plt.subplots(figsize=(8, 8))
+        
+        # Cria o gráfico de pizza
+        wedges, texts, autotexts = ax_setor.pie(
+            df_setores['Peso Total'],
+            labels=[f"{s} ({p*100:.1f}%)" for s, p in zip(df_setores['Setor'], df_setores['Peso Total'])], # Exibe setor e %
+            autopct='', # Remove o autopct padrão, pois já colocamos no label
+            startangle=90,
+            pctdistance=0.85 # Distância dos textos de porcentagem do centro
+        )
+        
+        # Ajusta a posição dos textos para evitar sobreposição
+        for autotext in autotexts:
+            autotext.set_color('white') # Cor do texto da porcentagem
+            autotext.set_fontsize(10)
+        
+        ax_setor.set_title("Distribuição da Carteira por Setor")
+        ax_setor.axis('equal')  # Garante que o gráfico de pizza seja circular.
+        
+        st.pyplot(fig_setor)
+    else:
+        st.warning("Não foi possível gerar o gráfico de setores. Verifique se há dados de setor válidos.")
+else:
+    st.warning("Nenhum dado da carteira disponível para gerar o gráfico de setores.")
+
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
