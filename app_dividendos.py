@@ -3,6 +3,7 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+import google.generativeai as genai # Importar a biblioteca do Gemini
 
 # --- Configurações da Carteira (Você pode editar isso!) ---
 CARTEIRA_ACOES = {
@@ -11,11 +12,11 @@ CARTEIRA_ACOES = {
     "VALE3.SA": {"nome": "Vale", "setor": "Mineração & Siderurgia", "peso": 0.10},
     "PETR4.SA": {"nome": "Petrobras", "setor": "Petróleo & Gás", "peso": 0.10},
     "WEGE3.SA": {"nome": "WEG", "setor": "Bens de Capital", "peso": 0.10},
-    "MGLU3.SA": {"nome": "Magazine Luiza", "setor": "Varejo", "peso": 0.10}, # Exemplo adicional
-    "SUZB3.SA": {"nome": "Suzano", "setor": "Papel e Celulose", "peso": 0.10}, # Exemplo adicional
-    "RENT3.SA": {"nome": "Localiza", "setor": "Serviços", "peso": 0.10}, # Exemplo adicional
-    "PRIO3.SA": {"nome": "PRIO", "setor": "Petróleo & Gás", "peso": 0.10}, # Exemplo adicional
-    "B3SA3.SA": {"nome": "B3", "setor": "Serviços Financeiros", "peso": 0.10}, # Exemplo adicional
+    "MGLU3.SA": {"nome": "Magazine Luiza", "setor": "Varejo", "peso": 0.10}, 
+    "SUZB3.SA": {"nome": "Suzano", "setor": "Papel e Celulose", "peso": 0.10}, 
+    "RENT3.SA": {"nome": "Localiza", "setor": "Serviços", "peso": 0.10}, 
+    "PRIO3.SA": {"nome": "PRIO", "setor": "Petróleo & Gás", "peso": 0.10}, 
+    "B3SA3.SA": {"nome": "B3", "setor": "Serviços Financeiros", "peso": 0.10}, 
 }
 
 # Ticker do benchmark (Ibovespa)
@@ -24,8 +25,18 @@ TICKER_IBOV = "^BVSP"
 # Período de análise (últimos 2 anos para um bom histórico)
 DIAS_HISTORICO = 730 # Aproximadamente 2 anos
 
+# --- Configurar a API do Gemini (Lê a chave das secrets do Streamlit) ---
+try:
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+except AttributeError:
+    st.error("Chave de API do Gemini não configurada. Por favor, adicione 'GEMINI_API_KEY' nas Secrets do Streamlit Cloud.")
+    st.stop() # Interrompe a execução se a chave não estiver configurada
+
+# Inicializa o modelo da IA
+model = genai.GenerativeModel('gemini-pro') # ou 'gemini-1.5-flash' se quiser o mais recente
+
 # --- Título e Introdução ---
-st.title("Carteira Dividendos - Análise Detalhada")
+st.title("Carteira Dividendos - Análise Detalhada com IA")
 st.write("Esta aplicação simula a análise de uma carteira de ações focada em dividendos, apresentando informações detalhadas e desempenho histórico.")
 
 st.markdown("""
@@ -47,7 +58,7 @@ def buscar_dados_acao(ticker):
 st.subheader("Composição da Carteira")
 dados_carteira = []
 precos_fechamento = pd.DataFrame()
-dividend_yields = {}
+dividend_yields_dict = {} # Renomeado para evitar conflito com variable global `dividend_yields` from previous code
 
 with st.spinner("Carregando dados das ações da carteira..."):
     for ticker, atributos in CARTEIRA_ACOES.items():
@@ -67,17 +78,18 @@ with st.spinner("Carregando dados das ações da carteira..."):
             
             if current_price and current_price > 0:
                 dy = (dividends_12m / current_price) * 100
-                dividend_yields[ticker] = dy
+                dividend_yields_dict[ticker] = dy # Armazena para uso na IA
             else:
-                dy = 0 # ou 'N/A'
-                dividend_yields[ticker] = dy
+                dy = 0 
+                dividend_yields_dict[ticker] = dy
 
             dados_carteira.append({
                 "Companhia": atributos["nome"],
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
                 "Setor": atributos["setor"],
-                "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A"
+                "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A",
+                "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A" # Adiciona preço para IA
             })
         except Exception as e:
             st.warning(f"Não foi possível carregar dados para {ticker}: {e}")
@@ -86,14 +98,48 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
                 "Setor": atributos["setor"],
-                "Dividend Yield": "Erro"
+                "Dividend Yield": "Erro",
+                "Preço Atual": "Erro"
             })
 
 df_carteira = pd.DataFrame(dados_carteira)
 df_carteira_sorted = df_carteira.sort_values(by="Companhia").reset_index(drop=True)
 st.dataframe(df_carteira_sorted, use_container_width=True)
 
-# --- Desempenho da Carteira vs. Benchmark ---
+# --- Análise Automática da Carteira com IA ---
+st.subheader("Análise Automática da Carteira (Gerada por IA)")
+if st.button("Gerar Análise de IA"):
+    if not df_carteira.empty:
+        prompt = f"""
+        Analise a seguinte carteira de ações com foco em dividendos. Forneça insights sobre os ativos, seus Dividend Yields e a diversificação por setor.
+        Critérios de bom Dividend Yield podem ser considerados acima de 6-7% anuais.
+        
+        Dados da carteira:
+        {df_carteira.to_markdown(index=False)}
+        
+        Preços de fechamento nos últimos dias (amostra para contexto de performance recente):
+        {precos_fechamento.tail(5).to_markdown()}
+        
+        Descreva os pontos fortes e fracos da carteira com base nos dados fornecidos, focando em:
+        - Visão geral da diversificação e dos setores.
+        - Destaque para ações com DYs notáveis (altos ou baixos).
+        - Potenciais riscos ou oportunidades baseados nos dados.
+        - Um resumo geral para um investidor focado em dividendos.
+        Seja conciso e direto.
+        """
+        
+        with st.spinner("A IA está gerando a análise..."):
+            try:
+                response = model.generate_content(prompt)
+                st.markdown(response.text)
+            except Exception as e:
+                st.error(f"Erro ao chamar a IA: {e}")
+                st.warning("Verifique sua chave de API e se há limites de uso.")
+    else:
+        st.warning("Nenhum dado da carteira disponível para análise da IA.")
+
+
+# --- Desempenho da Carteira vs. Benchmark (Ibovespa) ---
 st.subheader("Desempenho da Carteira vs. Benchmark (Ibovespa)")
 
 if not precos_fechamento.empty:
@@ -138,16 +184,12 @@ else:
 # --- Fluxo de Pagamento de Dividendos (Simplificado para o portfólio) ---
 st.subheader("Fluxo de Pagamento de Dividendos da Carteira")
 
-# Este é um cálculo simplificado. Um fluxo real exigiria mais lógica de pesos e datas de pagamento
-# Vamos somar os dividendos históricos de cada ação
 dividendos_combinados = pd.Series(dtype=float)
 with st.spinner("Calculando fluxo de dividendos..."):
     for ticker in CARTEIRA_ACOES.keys():
         try:
             _, _, dividends = buscar_dados_acao(ticker)
             if not dividends.empty:
-                # Multiplica os dividendos pelo peso da ação na carteira para uma simulação
-                # Isso é uma simplificação, pois o investimento inicial afetaria o valor real
                 weighted_dividends = dividends * CARTEIRA_ACOES[ticker]['peso'] 
                 dividendos_combinados = dividendos_combinados.add(weighted_dividends, fill_value=0)
         except Exception as e:
@@ -156,7 +198,7 @@ with st.spinner("Calculando fluxo de dividendos..."):
 if not dividendos_combinados.empty:
     dividendos_combinados_df = dividendos_combinados.to_frame(name='Dividendos Recebidos').reset_index()
     dividendos_combinados_df.columns = ['Data', 'Dividendos Recebidos']
-    dividendos_combinados_df['Data'] = dividendos_combinados_df['Data'].dt.date # Apenas a data
+    dividendos_combinados_df['Data'] = dividendos_combinados_df['Data'].dt.date 
     dividendos_combinados_df = dividendos_combinados_df.sort_values(by='Data', ascending=False)
     st.dataframe(dividendos_combinados_df, use_container_width=True)
 else:
