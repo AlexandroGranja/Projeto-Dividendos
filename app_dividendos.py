@@ -33,7 +33,7 @@ except AttributeError:
     st.stop() # Interrompe a execução se a chave não estiver configurada
 
 # Inicializa o modelo da IA
-model = genai.GenerativeModel('gemini-pro') # ou 'gemini-1.5-flash' se quiser o mais recente
+model = genai.GenerativeModel('gemini-1.5-flash') # ou 'gemini-1.5-flash' se quiser o mais recente
 
 # --- Título e Introdução ---
 st.title("Carteira Dividendos - Análise Detalhada com IA")
