@@ -5,20 +5,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 import google.generativeai as genai # Importar a biblioteca do Gemini
 
-# --- Configurações da Carteira (Você pode editar isso!) ---
-CARTEIRA_ACOES = {
-    "BBAS3.SA": {"nome": "Banco do Brasil", "setor": "Bancos", "peso": 0.10},
-    "ITUB4.SA": {"nome": "Itaú Unibanco", "setor": "Bancos", "peso": 0.10},
-    "VALE3.SA": {"nome": "Vale", "setor": "Mineração & Siderurgia", "peso": 0.10},
-    "PETR4.SA": {"nome": "Petrobras", "setor": "Petróleo & Gás", "peso": 0.10},
-    "WEGE3.SA": {"nome": "WEG", "setor": "Bens de Capital", "peso": 0.10},
-    "MGLU3.SA": {"nome": "Magazine Luiza", "setor": "Varejo", "peso": 0.10}, 
-    "SUZB3.SA": {"nome": "Suzano", "setor": "Papel e Celulose", "peso": 0.10}, 
-    "RENT3.SA": {"nome": "Localiza", "setor": "Serviços", "peso": 0.10}, 
-    "PRIO3.SA": {"nome": "PRIO", "setor": "Petróleo & Gás", "peso": 0.10}, 
-    "B3SA3.SA": {"nome": "B3", "setor": "Serviços Financeiros", "peso": 0.10}, 
-}
-
 # Ticker do benchmark (Ibovespa)
 TICKER_IBOV = "^BVSP"
 
@@ -33,7 +19,7 @@ except AttributeError:
     st.stop() # Interrompe a execução se a chave não estiver configurada
 
 # Inicializa o modelo da IA
-model = genai.GenerativeModel('gemini-1.5-flash') # ou 'gemini-1.5-flash' se quiser o mais recente
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 # --- Título e Introdução ---
 st.title("Carteira Dividendos - Análise Detalhada com IA")
@@ -42,6 +28,56 @@ st.write("Esta aplicação simula a análise de uma carteira de ações focada e
 st.markdown("""
 Para o investidor em busca de ações com boa perspectiva de distribuição contínua de rendimento através de dividendos. O investimento nesses nomes é uma alternativa para quem busca menor volatilidade no valor das ações e oportunidade de criar um fluxo de caixa recorrente por meio da distribuição dos lucros pelas companhias.
 """)
+
+# --- Upload da Carteira Pelo Usuário ---
+st.subheader("Definição da Carteira por Upload")
+st.info("Por favor, faça o upload de um arquivo CSV ou Excel com as colunas 'Ticker' e 'Peso'.")
+
+uploaded_file = st.file_uploader("Escolha um arquivo CSV ou Excel", type=["csv", "xlsx"])
+
+CARTEIRA_ACOES = {} # Inicializa como vazio
+if uploaded_file is not None:
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            df_upload = pd.read_csv(uploaded_file)
+        else: # Assumir .xlsx
+            df_upload = pd.read_excel(uploaded_file)
+        
+        # Validar colunas
+        if 'Ticker' in df_upload.columns and 'Peso' in df_upload.columns:
+            total_pesos = 0
+            for index, row in df_upload.iterrows():
+                ticker = str(row['Ticker']).strip().upper()
+                try:
+                    peso = float(row['Peso'])
+                    if peso > 0:
+                        CARTEIRA_ACOES[ticker] = {"peso": peso} # Nome e setor serão buscados dinamicamente
+                        total_pesos += peso
+                    else:
+                        st.warning(f"Ignorando ticker '{ticker}': Peso deve ser maior que zero.")
+                except ValueError:
+                    st.warning(f"Ignorando ticker '{ticker}': Peso inválido. Certifique-se de que é um número.")
+            
+            # Normalizar pesos se a soma não for 1.0 (100%) e houver ações
+            if total_pesos > 0 and abs(total_pesos - 1.0) > 0.01:
+                st.warning(f"A soma dos pesos é {total_pesos:.2f}. Normalizando os pesos para 100%.")
+                for ticker in CARTEIRA_ACOES:
+                    CARTEIRA_ACOES[ticker]["peso"] /= total_pesos
+            elif total_pesos == 0 and len(CARTEIRA_ACOES) > 0: # Caso todos os pesos sejam 0, mas há tickers
+                 st.error("Nenhuma ação com peso válido foi encontrada no arquivo. Certifique-se de que os pesos são números maiores que zero.")
+                 CARTEIRA_ACOES = {} # Limpa a carteira para evitar processamento com erro
+        else:
+            st.error("O arquivo deve conter as colunas 'Ticker' e 'Peso'.")
+            CARTEIRA_ACOES = {} # Limpa a carteira em caso de colunas inválidas
+
+    except Exception as e:
+        st.error(f"Erro ao ler o arquivo: {e}. Verifique o formato e as colunas.")
+        CARTEIRA_ACOES = {} # Limpa a carteira em caso de erro
+
+if not CARTEIRA_ACOES: # Se a carteira ainda estiver vazia após o upload
+    st.info("Aguardando upload de um arquivo válido para carregar a carteira.")
+    st.stop() # Interrompe a execução se não houver carteira válida
+
 
 # --- Função para buscar dados de ações ---
 @st.cache_data
@@ -58,12 +94,16 @@ def buscar_dados_acao(ticker):
 st.subheader("Composição da Carteira")
 dados_carteira = []
 precos_fechamento = pd.DataFrame()
-dividend_yields_dict = {} # Renomeado para evitar conflito com variable global `dividend_yields` from previous code
+dividend_yields_dict = {}
 
 with st.spinner("Carregando dados das ações da carteira..."):
     for ticker, atributos in CARTEIRA_ACOES.items():
         try:
             info, hist, dividends = buscar_dados_acao(ticker)
+            
+            # Obtém nome e setor dinamicamente do Yahoo Finance
+            nome_acao = info.get('longName', ticker)
+            setor_acao = info.get('sector', 'N/A')
             
             # Adicionar preço de fechamento ao DataFrame combinado
             if not hist.empty:
@@ -72,7 +112,8 @@ with st.spinner("Carregando dados das ações da carteira..."):
             # Calcular Dividend Yield (últimos 12 meses)
             hoje = datetime.now()
             um_ano_atras = hoje - timedelta(days=365)
-            dividends_12m = dividends.loc[str(um_ano_atras.year):str(hoje.year)].sum()
+            # Garantir que a seleção de datas do dividends não falhe se não houver dados no ano
+            dividends_12m = dividends[(dividends.index >= um_ano_atras) & (dividends.index <= hoje)].sum()
             
             current_price = info.get('currentPrice')
             
@@ -84,59 +125,98 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 dividend_yields_dict[ticker] = dy
 
             dados_carteira.append({
-                "Companhia": atributos["nome"],
+                "Companhia": nome_acao, # Corrigido: usa a variável local nome_acao
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
-                "Setor": atributos["setor"],
+                "Setor": setor_acao, # Corrigido: usa a variável local setor_acao
                 "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A",
-                "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A" # Adiciona preço para IA
+                "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A"
             })
         except Exception as e:
             st.warning(f"Não foi possível carregar dados para {ticker}: {e}")
             dados_carteira.append({
-                "Companhia": atributos["nome"],
+                "Companhia": ticker, # Usa o ticker como nome se der erro
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
-                "Setor": atributos["setor"],
-                "Dividend Yield": "Erro",
-                "Preço Atual": "Erro"
+                "Setor": "N/A (Erro ao carregar)", # Indica que não pôde carregar
+                "Dividend Yield": "N/A (Erro)",
+                "Preço Atual": "N/A (Erro)"
             })
 
 df_carteira = pd.DataFrame(dados_carteira)
 df_carteira_sorted = df_carteira.sort_values(by="Companhia").reset_index(drop=True)
 st.dataframe(df_carteira_sorted, use_container_width=True)
 
+# --- Função para Gerar Prompt da IA ---
+def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
+    # Formatar os dados da carteira para o prompt da IA
+    carteira_markdown = df_carteira.to_markdown(index=False)
+    
+    # Adicionar o Dividend Yield individual no formato do prompt
+    dy_individual_str = "\n".join([f"- {ticker}: {dy:.2f}%" for ticker, dy in dividend_yields_dict.items()])
+
+    # Calcular o DY médio ponderado da carteira
+    dy_ponderado = 0
+    total_peso = 0
+    # Converta a coluna 'Peso' para float antes de usar, pois ela vem como string "X%"
+    df_temp = df_carteira.copy()
+    df_temp['Peso_Decimal'] = df_temp['Peso'].str.replace('%', '').astype(float) / 100
+
+    for index, row in df_temp.iterrows():
+        ticker = row['Ticker']
+        peso = row['Peso_Decimal']
+        
+        if ticker in dividend_yields_dict:
+            dy = dividend_yields_dict[ticker]
+            dy_ponderado += dy * peso
+            total_peso += peso
+
+    if total_peso > 0:
+        dy_ponderado_final = dy_ponderado / total_peso
+    else:
+        dy_ponderado_final = 0
+
+    prompt_content = f"""
+    Eu sou um investidor focado em dividendos. Por favor, analise a seguinte carteira de ações e me forneça insights e possíveis sugestões.
+
+    **Composição Atual da Carteira (e seus pesos normalizados):**
+    {carteira_markdown}
+
+    **Dividend Yields Individuais Recentes (últimos 12 meses):**
+    {dy_individual_str}
+
+    **Dividend Yield Ponderado da Carteira:** {dy_ponderado_final:.2f}%
+
+    Com base nesses dados:
+    1.  **Análise da Carteira Atual:**
+        * Avalie a diversificação setorial. Há setores muito concentrados?
+        * Comente sobre o Dividend Yield geral da carteira e dos papéis individuais.
+        * Quais são os pontos fortes e fracos desta carteira do ponto de vista de dividendos?
+        * Há alguma preocupação com alguma ação específica em termos de DY ou preço?
+    2.  **Monitoramento e Sugestões (Baseado nos dados atuais):**
+        * Considerando as ações desta carteira, quais delas se destacaram ou tiveram mudanças notáveis no DY recentemente (com base no DY atual fornecido)?
+        * Se esta carteira busca maximizar dividendos consistentes, que tipo de ações (setores, características) poderiam ser consideradas para fortalecer ainda mais o fluxo de dividendos? (Não me dê tickers específicos, mas tipos de empresas).
+        * Quais são as principais tendências ou riscos que um investidor de dividendos deveria estar ciente olhando para esta carteira no cenário atual?
+    3.  **Formato da Resposta:** Por favor, forneça uma análise clara e concisa, como um relatório para um investidor.
+    """
+    return prompt_content
+
 # --- Análise Automática da Carteira com IA ---
 st.subheader("Análise Automática da Carteira (Gerada por IA)")
-if st.button("Gerar Análise de IA"):
+if st.button("Atualizar Análise e Sugestões de IA"): # Botão com novo texto
     if not df_carteira.empty:
-        prompt = f"""
-        Analise a seguinte carteira de ações com foco em dividendos. Forneça insights sobre os ativos, seus Dividend Yields e a diversificação por setor.
-        Critérios de bom Dividend Yield podem ser considerados acima de 6-7% anuais.
+        # Chamar a nova função que gera o prompt
+        prompt = gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict)
         
-        Dados da carteira:
-        {df_carteira.to_markdown(index=False)}
-        
-        Preços de fechamento nos últimos dias (amostra para contexto de performance recente):
-        {precos_fechamento.tail(5).to_markdown()}
-        
-        Descreva os pontos fortes e fracos da carteira com base nos dados fornecidos, focando em:
-        - Visão geral da diversificação e dos setores.
-        - Destaque para ações com DYs notáveis (altos ou baixos).
-        - Potenciais riscos ou oportunidades baseados nos dados.
-        - Um resumo geral para um investidor focado em dividendos.
-        Seja conciso e direto.
-        """
-        
-        with st.spinner("A IA está gerando a análise..."):
+        with st.spinner("A IA está gerando a análise e sugestões..."):
             try:
                 response = model.generate_content(prompt)
                 st.markdown(response.text)
             except Exception as e:
                 st.error(f"Erro ao chamar a IA: {e}")
-                st.warning("Verifique sua chave de API e se há limites de uso.")
+                st.warning("Verifique sua chave de API e se há limites de uso ou se o modelo está acessível.")
     else:
-        st.warning("Nenhum dado da carteira disponível para análise da IA.")
+        st.warning("Nenhum dado da carteira disponível para análise da IA. Faça o upload do arquivo da carteira.")
 
 
 # --- Desempenho da Carteira vs. Benchmark (Ibovespa) ---
