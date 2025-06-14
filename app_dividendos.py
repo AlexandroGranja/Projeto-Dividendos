@@ -21,6 +21,10 @@ except AttributeError:
 # Inicializa o modelo da IA
 model = genai.GenerativeModel('gemini-1.5-flash')
 
+# --- Inicialização do Session State ---
+if 'ia_report_text' not in st.session_state:
+    st.session_state.ia_report_text = None
+
 # --- Título e Introdução ---
 st.title("Carteira Dividendos - Análise Detalhada com IA")
 st.write("Esta aplicação simula a análise de uma carteira de ações focada em dividendos, apresentando informações detalhadas e desempenho histórico.")
@@ -69,6 +73,8 @@ if uploaded_file is not None:
         else:
             st.error("O arquivo deve conter as colunas 'Ticker' e 'Peso'.")
             CARTEIRA_ACOES = {} # Limpa a carteira em caso de colunas inválidas
+
+            st.session_state.ia_report_text = response.text # Salva o texto do relatório na sessão
 
     except Exception as e:
         st.error(f"Erro ao ler o arquivo: {e}. Verifique o formato e as colunas.")
@@ -392,6 +398,19 @@ if not df_carteira.empty:
         mime="text/csv",
         help="Baixa a tabela de composição da carteira com todas as métricas em formato CSV."
     )
+
+    # Botão para baixar o relatório da IA (aparece apenas se houver relatório)
+    if st.session_state.ia_report_text:
+        st.download_button(
+            label="Baixar Relatório da IA (.txt)",
+            data=st.session_state.ia_report_text,
+            file_name=f"relatorio_ia_dividendos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            help="Baixa a análise e sugestões geradas pela Inteligência Artificial em formato de texto."
+        )
+    else:
+        st.info("Gere a análise da IA (botão acima) para poder baixá-la.")
+
 else:
     st.info("Nenhum dado da carteira disponível para exportação.")
 
