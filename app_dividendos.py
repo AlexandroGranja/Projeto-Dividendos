@@ -126,23 +126,57 @@ with st.spinner("Carregando dados das ações da carteira..."):
                 dy = 0 
                 dividend_yields_dict[ticker] = dy
 
+            # --- NOVAS MÉTRICAS ADICIONADAS AQUI ---
+            # Usamos .get() para evitar erros se a métrica não existir para a ação
+            # Formatamos como string para exibir bonito, ou "N/A" se não encontrar
+            pl = info.get('forwardPE', 'N/A') # Preço/Lucro Futuro (mais comum para análise)
+            pvp = info.get('priceToBook', 'N/A') # Preço/Valor Patrimonial
+            roe = info.get('returnOnEquity', 'N/A') # Retorno sobre Patrimônio Líquido
+            market_cap = info.get('marketCap', 'N/A') # Capitalização de Mercado
+            
+            # Formatação para exibição:
+            pl_display = f"{pl:.2f}" if isinstance(pl, (int, float)) else "N/A"
+            pvp_display = f"{pvp:.2f}" if isinstance(pvp, (int, float)) else "N/A"
+            roe_display = f"{roe*100:.2f}%" if isinstance(roe, (int, float)) else "N/A" # ROE geralmente em %
+            
+            # Formatação de Market Cap para bilhões (B) ou milhões (M)
+            market_cap_display = "N/A"
+            if isinstance(market_cap, (int, float)):
+                if market_cap >= 1_000_000_000_000: # Trilhões
+                    market_cap_display = f"R$ {market_cap / 1_000_000_000_000:.2f}T"
+                elif market_cap >= 1_000_000_000: # Bilhões
+                    market_cap_display = f"R$ {market_cap / 1_000_000_000:.2f}B"
+                elif market_cap >= 1_000_000: # Milhões
+                    market_cap_display = f"R$ {market_cap / 1_000_000:.2f}M"
+                else:
+                    market_cap_display = f"R$ {market_cap:,.2f}" # Para valores menores
+
             dados_carteira.append({
-                "Companhia": nome_acao, # Corrigido: usa a variável local nome_acao
+                "Companhia": nome_acao,
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
-                "Setor": setor_acao, # Corrigido: usa a variável local setor_acao
+                "Setor": setor_acao,
                 "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A",
-                "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A"
+                "Preço Atual": f"R$ {current_price:.2f}" if current_price else "N/A",
+                "P/L": pl_display,         # <-- NOVA COLUNA
+                "P/VP": pvp_display,       # <-- NOVA COLUNA
+                "ROE": roe_display,        # <-- NOVA COLUNA
+                "Market Cap": market_cap_display # <-- NOVA COLUNA
             })
         except Exception as e:
             st.warning(f"Não foi possível carregar dados para {ticker}: {e}")
+            # Certifique-se de que o bloco 'except' também inclua as novas colunas
             dados_carteira.append({
-                "Companhia": ticker, # Usa o ticker como nome se der erro
+                "Companhia": ticker,
                 "Ticker": ticker,
                 "Peso": f"{atributos['peso']*100:.0f}%",
-                "Setor": "N/A (Erro ao carregar)", # Indica que não pôde carregar
+                "Setor": "N/A (Erro ao carregar)",
                 "Dividend Yield": "N/A (Erro)",
-                "Preço Atual": "N/A (Erro)"
+                "Preço Atual": "N/A (Erro)",
+                "P/L": "N/A (Erro)",         # <-- Adicione aqui também!
+                "P/VP": "N/A (Erro)",       # <-- Adicione aqui também!
+                "ROE": "N/A (Erro)",        # <-- Adicione aqui também!
+                "Market Cap": "N/A (Erro)" # <-- Adicione aqui também!
             })
 
 df_carteira = pd.DataFrame(dados_carteira)
