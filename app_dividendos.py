@@ -275,6 +275,35 @@ if not df_carteira_sorted.empty:
 else:
     st.warning("Nenhum dado da carteira disponível para gerar o gráfico de setores.")
 
+    # --- Gráfico de Comparação de Dividend Yield por Ação ---
+st.subheader("Dividend Yield por Ação")
+
+if dividend_yields_dict: # Verifica se o dicionário de DYs não está vazio
+    # Converte o dicionário em DataFrame e ordena para melhor visualização
+    df_dy_individual = pd.DataFrame(list(dividend_yields_dict.items()), columns=['Ticker', 'Dividend Yield'])
+    df_dy_individual = df_dy_individual.sort_values(by='Dividend Yield', ascending=False)
+
+    fig_dy, ax_dy = plt.subplots(figsize=(12, 6))
+    
+    # Cria o gráfico de barras
+    bars = ax_dy.bar(df_dy_individual['Ticker'], df_dy_individual['Dividend Yield'], color='teal')
+    
+    ax_dy.set_title("Dividend Yield Individual das Ações na Carteira")
+    ax_dy.set_xlabel("Ticker")
+    ax_dy.set_ylabel("Dividend Yield (%)")
+    ax_dy.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Adiciona os valores nas barras para facilitar a leitura
+    for bar in bars:
+        yval = bar.get_height()
+        ax_dy.text(bar.get_x() + bar.get_width()/2, yval + 0.1, f'{yval:.2f}%', ha='center', va='bottom', fontsize=9)
+
+    plt.xticks(rotation=45, ha='right') # Rotaciona os rótulos do eixo X para melhor legibilidade
+    plt.tight_layout() # Ajusta o layout para evitar sobreposição
+    st.pyplot(fig_dy)
+else:
+    st.warning("Não há dados de Dividend Yield individual para gerar o gráfico.")
+
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
