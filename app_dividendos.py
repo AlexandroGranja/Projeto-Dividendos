@@ -68,8 +68,8 @@ if uploaded_file is not None:
                 for ticker in CARTEIRA_ACOES:
                     CARTEIRA_ACOES[ticker]["peso"] /= total_pesos
             elif total_pesos == 0 and len(CARTEIRA_ACOES) > 0: # Caso todos os pesos sejam 0, mas há tickers
-                 st.error("Nenhuma ação com peso válido foi encontrada no arquivo. Certifique-se de que os pesos são números maiores que zero.")
-                 CARTEIRA_ACOES = {} # Limpa a carteira para evitar processamento com erro
+                st.error("Nenhuma ação com peso válido foi encontrada no arquivo. Certifique-se de que os pesos são números maiores que zero.")
+                CARTEIRA_ACOES = {} # Limpa a carteira para evitar processamento com erro
         else:
             st.error("O arquivo deve conter as colunas 'Ticker' e 'Peso'.")
             CARTEIRA_ACOES = {} # Limpa a carteira em caso de colunas inválidas
@@ -341,7 +341,7 @@ if not df_carteira.empty:
 else:
     st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
 
-    # Continuação do bloco 'Sugestão de Rebalanceamento'
+    # Continuação do bloco 'Sugestão de Rebalanceamento' (este bloco parece duplicado, mas vou mantê-lo como está no seu original por enquanto)
 if not df_carteira.empty:
     num_acoes = len(df_carteira)
     if num_acoes > 0:
@@ -384,35 +384,6 @@ if not df_carteira.empty:
 else:
     st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
 
-    # --- Exportar Dados ---
-st.subheader("Exportar Dados da Carteira")
-
-if not df_carteira.empty:
-    # Converte o DataFrame para CSV
-    csv_file = df_carteira_sorted.to_csv(index=False, sep=';', decimal=',') # Usar ; como separador e , como decimal para compatibilidade com Excel BR
-
-    st.download_button(
-        label="Baixar Tabela da Carteira (.csv)",
-        data=csv_file,
-        file_name=f"carteira_dividendos_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-        help="Baixa a tabela de composição da carteira com todas as métricas em formato CSV."
-    )
-
-    # Botão para baixar o relatório da IA (aparece apenas se houver relatório)
-    if st.session_state.ia_report_text:
-        st.download_button(
-            label="Baixar Relatório da IA (.txt)",
-            data=st.session_state.ia_report_text,
-            file_name=f"relatorio_ia_dividendos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
-            mime="text/plain",
-            help="Baixa a análise e sugestões geradas pela Inteligência Artificial em formato de texto."
-        )
-    else:
-        st.info("Gere a análise da IA (botão acima) para poder baixá-la.")
-
-else:
-    st.info("Nenhum dado da carteira disponível para exportação.")
 
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
@@ -446,7 +417,7 @@ def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     prompt_content = f"""
     Eu sou um investidor focado em dividendos. Por favor, analise a seguinte carteira de ações e me forneça insights e possíveis sugestões.
 
-    **Data da Análise:** {datetime.now().strftime("%d de %B de %Y")} # <--- ADICIONE ESTA LINHA AQUI!
+    **Data da Análise:** {datetime.now().strftime("%d de %B de %Y")}
 
     **Composição Atual da Carteira (e seus pesos normalizados):**
     {carteira_markdown}
@@ -553,6 +524,37 @@ if not dividendos_combinados.empty:
     st.dataframe(dividendos_combinados_df, use_container_width=True)
 else:
     st.write("Não há dados de dividendos para esta carteira no período selecionado.")
+
+# --- Exportar Dados ---
+# MOVIDO PARA AQUI, DEPOIS DA SEÇÃO DA IA
+st.subheader("Exportar Dados da Carteira")
+
+if not df_carteira.empty:
+    # Converte o DataFrame para CSV
+    csv_file = df_carteira_sorted.to_csv(index=False, sep=';', decimal=',') # Usar ; como separador e , como decimal para compatibilidade com Excel BR
+
+    st.download_button(
+        label="Baixar Tabela da Carteira (.csv)",
+        data=csv_file,
+        file_name=f"carteira_dividendos_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        help="Baixa a tabela de composição da carteira com todas as métricas em formato CSV."
+    )
+
+    # Botão para baixar o relatório da IA (aparece apenas se houver relatório)
+    if st.session_state.ia_report_text:
+        st.download_button(
+            label="Baixar Relatório da IA (.txt)",
+            data=st.session_state.ia_report_text,
+            file_name=f"relatorio_ia_dividendos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+            mime="text/plain",
+            help="Baixa a análise e sugestões geradas pela Inteligência Artificial em formato de texto."
+        )
+    else:
+        st.info("Gere a análise da IA (botão acima) para poder baixá-la.")
+
+else:
+    st.info("Nenhum dado da carteira disponível para exportação.")
 
 # --- Disclaimer (Importante!) ---
 st.markdown("---")
