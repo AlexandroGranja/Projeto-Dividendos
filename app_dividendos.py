@@ -4,115 +4,170 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
-# Título da Aplicação
-st.title("DividendoBot - Análise de Dividendos")
-st.write("Analise ações e seus dividendos para tomar decisões de investimento.")
-
-# Campo para o usuário inserir o ticker da ação
-ticker_input = st.text_input("Digite o código da ação (ex: PETR4.SA, ITUB4.SA, TSLA):", "PETR4.SA")
-
-# Botão para buscar dados
-if st.button("Analisar Ação"):
-    if ticker_input:
-        try:
-            # Baixar dados da ação
-            acao = yf.Ticker(ticker_input)
-
-            # Informações básicas da ação
-            info = acao.info
-            st.subheader(f"Informações para {ticker_input}:")
-            st.write(f"Nome da Empresa: {info.get('longName', 'N/A')}")
-            st.write(f"Setor: {info.get('sector', 'N/A')}")
-            st.write(f"Mercado: {info.get('marketCap', 'N/A'):,.2f}")
-            st.write(f"Preço Atual: {info.get('currentPrice', 'N/A'):.2f}")
-
-            # Calcular Dividend Yield (DY)
-            # Baixar histórico de preços para o cálculo do DY (últimos 12 meses)
-            hoje = datetime.now()
-            um_ano_atras = hoje - timedelta(days=365)
-            hist = acao.history(start=um_ano_atras, end=hoje)
-
-            dividendos_anuais = acao.dividends.loc[str(um_ano_atras.year):str(hoje.year)].sum()
-            
-            if info.get('currentPrice'):
-                dividend_yield = (dividendos_anuais / info['currentPrice']) * 100 if info['currentPrice'] > 0 else 0
-                st.write(f"Dividendos pagos nos últimos 12 meses: R$ {dividendos_anuais:.2f}")
-                st.metric(label="Dividend Yield (DY)", value=f"{dividend_yield:.2f}%")
-            else:
-                st.write("Não foi possível calcular o Dividend Yield (preço atual não disponível).")
-
-
-            # Exibir dividendos pagos historicamente
-            st.subheader("Histórico de Dividendos Pagos:")
-            dividends_df = acao.dividends
-            if not dividends_df.empty:
-                st.dataframe(dividends_df.reset_index().rename(columns={'Date': 'Data', 'Dividends': 'Valor do Dividendo'}), use_container_width=True)
-                
-                # Gráfico de dividendos ao longo do tempo
-                fig_dividends, ax_dividends = plt.subplots(figsize=(10, 5))
-                ax_dividends.plot(dividends_df.index, dividends_df.values, marker='o')
-                ax_dividends.set_title(f"Dividendos Pagos por {ticker_input}")
-                ax_dividends.set_xlabel("Data")
-                ax_dividends.set_ylabel("Valor do Dividendo")
-                ax_dividends.grid(True)
-                st.pyplot(fig_dividends)
-            else:
-                st.write("Não há histórico de dividendos para esta ação.")
-
-            # Gráfico de preço histórico (últimos 6 meses)
-            st.subheader("Gráfico de Preço Histórico (Últimos 6 meses):")
-            seis_meses_atras = hoje - timedelta(days=180)
-            hist_6m = acao.history(period="6mo") # ou period="6mo"
-            if not hist_6m.empty:
-                fig_price, ax_price = plt.subplots(figsize=(10, 5))
-                ax_price.plot(hist_6m.index, hist_6m['Close'])
-                ax_price.set_title(f"Preço de Fechamento de {ticker_input}")
-                ax_price.set_xlabel("Data")
-                ax_price.set_ylabel("Preço de Fechamento")
-                ax_price.grid(True)
-                st.pyplot(fig_price)
-            else:
-                st.write("Não foi possível obter o histórico de preços.")
-
-        except Exception as e:
-            st.error(f"Ocorreu um erro ao buscar dados para {ticker_input}: {e}")
-            st.warning("Verifique se o código da ação está correto (ex: PETR4.SA para Petrobras na B3).")
-    else:
-        st.warning("Por favor, digite um código de ação para analisar.")
-
-# --- Seção de Ranking de Dividend Yield (Exemplo simplificado) ---
-st.sidebar.subheader("Ranking de Ações por Dividend Yield (Exemplo)")
-st.sidebar.write("Esta seção é um exemplo. Para um ranking real, você precisaria de uma lista de ações e lógica para buscar e comparar os DYs.")
-
-# Exemplo de algumas ações para o ranking (você pode expandir esta lista)
-acoes_exemplo = {
-    "ITUB4.SA": "Itaú Unibanco",
-    "BBAS3.SA": "Banco do Brasil",
-    "VALE3.SA": "Vale",
-    "WEGE3.SA": "WEG"
+# --- Configurações da Carteira (Você pode editar isso!) ---
+CARTEIRA_ACOES = {
+    "BBAS3.SA": {"nome": "Banco do Brasil", "setor": "Bancos", "peso": 0.10},
+    "ITUB4.SA": {"nome": "Itaú Unibanco", "setor": "Bancos", "peso": 0.10},
+    "VALE3.SA": {"nome": "Vale", "setor": "Mineração & Siderurgia", "peso": 0.10},
+    "PETR4.SA": {"nome": "Petrobras", "setor": "Petróleo & Gás", "peso": 0.10},
+    "WEGE3.SA": {"nome": "WEG", "setor": "Bens de Capital", "peso": 0.10},
+    "MGLU3.SA": {"nome": "Magazine Luiza", "setor": "Varejo", "peso": 0.10}, # Exemplo adicional
+    "SUZB3.SA": {"nome": "Suzano", "setor": "Papel e Celulose", "peso": 0.10}, # Exemplo adicional
+    "RENT3.SA": {"nome": "Localiza", "setor": "Serviços", "peso": 0.10}, # Exemplo adicional
+    "PRIO3.SA": {"nome": "PRIO", "setor": "Petróleo & Gás", "peso": 0.10}, # Exemplo adicional
+    "B3SA3.SA": {"nome": "B3", "setor": "Serviços Financeiros", "peso": 0.10}, # Exemplo adicional
 }
 
-dy_data = []
-for ticker, name in acoes_exemplo.items():
-    try:
-        acao_obj = yf.Ticker(ticker)
-        info = acao_obj.info
-        dividends_12m = acao_obj.dividends.loc[str((datetime.now() - timedelta(days=365)).year):str(datetime.now().year)].sum()
-        current_price = info.get('currentPrice')
-        
-        if current_price and current_price > 0:
-            dy = (dividends_12m / current_price) * 100
-            dy_data.append({"Ação": name, "Ticker": ticker, "Dividend Yield": f"{dy:.2f}%", "Dividendos (12m)": f"R$ {dividends_12m:.2f}", "Preço Atual": f"R$ {current_price:.2f}"})
-        else:
-            dy_data.append({"Ação": name, "Ticker": ticker, "Dividend Yield": "N/A", "Dividendos (12m)": "N/A", "Preço Atual": "N/A"})
-    except Exception as e:
-        dy_data.append({"Ação": name, "Ticker": ticker, "Dividend Yield": "Erro", "Dividendos (12m)": "Erro", "Preço Atual": "Erro"})
+# Ticker do benchmark (Ibovespa)
+TICKER_IBOV = "^BVSP"
 
-if dy_data:
-    df_dy = pd.DataFrame(dy_data)
-    # Classifica por Dividend Yield, tentando converter para float para ordenar
-    df_dy_sorted = df_dy.copy()
-    df_dy_sorted['DY_Float'] = df_dy_sorted['Dividend Yield'].str.replace('%', '').replace('N/A', '0').replace('Erro', '0').astype(float)
-    df_dy_sorted = df_dy_sorted.sort_values(by='DY_Float', ascending=False)
-    df_dy_sorted = df_dy_sorted.drop(columns=['DY_Float']) # Remove a coluna auxiliar
-    st.sidebar.dataframe(df_dy_sorted, use_container_width=True)
+# Período de análise (últimos 2 anos para um bom histórico)
+DIAS_HISTORICO = 730 # Aproximadamente 2 anos
+
+# --- Título e Introdução ---
+st.title("Carteira Dividendos - Análise Detalhada")
+st.write("Esta aplicação simula a análise de uma carteira de ações focada em dividendos, apresentando informações detalhadas e desempenho histórico.")
+
+st.markdown("""
+Para o investidor em busca de ações com boa perspectiva de distribuição contínua de rendimento através de dividendos. O investimento nesses nomes é uma alternativa para quem busca menor volatilidade no valor das ações e oportunidade de criar um fluxo de caixa recorrente por meio da distribuição dos lucros pelas companhias.
+""")
+
+# --- Função para buscar dados de ações ---
+@st.cache_data
+def buscar_dados_acao(ticker):
+    acao = yf.Ticker(ticker)
+    info = acao.info
+    hoje = datetime.now()
+    inicio = hoje - timedelta(days=DIAS_HISTORICO)
+    hist = acao.history(start=inicio, end=hoje)
+    dividends = acao.dividends.loc[str(inicio.year):str(hoje.year)]
+    return info, hist, dividends
+
+# --- Carregar dados da carteira ---
+st.subheader("Composição da Carteira")
+dados_carteira = []
+precos_fechamento = pd.DataFrame()
+dividend_yields = {}
+
+with st.spinner("Carregando dados das ações da carteira..."):
+    for ticker, atributos in CARTEIRA_ACOES.items():
+        try:
+            info, hist, dividends = buscar_dados_acao(ticker)
+            
+            # Adicionar preço de fechamento ao DataFrame combinado
+            if not hist.empty:
+                precos_fechamento[ticker] = hist['Close']
+
+            # Calcular Dividend Yield (últimos 12 meses)
+            hoje = datetime.now()
+            um_ano_atras = hoje - timedelta(days=365)
+            dividends_12m = dividends.loc[str(um_ano_atras.year):str(hoje.year)].sum()
+            
+            current_price = info.get('currentPrice')
+            
+            if current_price and current_price > 0:
+                dy = (dividends_12m / current_price) * 100
+                dividend_yields[ticker] = dy
+            else:
+                dy = 0 # ou 'N/A'
+                dividend_yields[ticker] = dy
+
+            dados_carteira.append({
+                "Companhia": atributos["nome"],
+                "Ticker": ticker,
+                "Peso": f"{atributos['peso']*100:.0f}%",
+                "Setor": atributos["setor"],
+                "Dividend Yield": f"{dy:.2f}%" if current_price else "N/A"
+            })
+        except Exception as e:
+            st.warning(f"Não foi possível carregar dados para {ticker}: {e}")
+            dados_carteira.append({
+                "Companhia": atributos["nome"],
+                "Ticker": ticker,
+                "Peso": f"{atributos['peso']*100:.0f}%",
+                "Setor": atributos["setor"],
+                "Dividend Yield": "Erro"
+            })
+
+df_carteira = pd.DataFrame(dados_carteira)
+df_carteira_sorted = df_carteira.sort_values(by="Companhia").reset_index(drop=True)
+st.dataframe(df_carteira_sorted, use_container_width=True)
+
+# --- Desempenho da Carteira vs. Benchmark ---
+st.subheader("Desempenho da Carteira vs. Benchmark (Ibovespa)")
+
+if not precos_fechamento.empty:
+    with st.spinner("Calculando desempenho da carteira..."):
+        # Buscar dados do Ibovespa
+        info_ibov, hist_ibov, _ = buscar_dados_acao(TICKER_IBOV)
+        
+        # Combinar preços (preencher NaNs com ffill ou bfill para evitar problemas)
+        dados_combinados = pd.concat([precos_fechamento, hist_ibov['Close'].rename(TICKER_IBOV)], axis=1)
+        dados_combinados = dados_combinados.dropna() # Remover datas onde não há dados para todos
+
+        # Normalizar os preços para a base 100
+        dados_normalizados = (dados_combinados / dados_combinados.iloc[0]) * 100
+
+        # Calcular o retorno ponderado da carteira
+        retorno_carteira = pd.Series(0.0, index=dados_normalizados.index)
+        for ticker, atributos in CARTEIRA_ACOES.items():
+            if ticker in dados_normalizados.columns:
+                retorno_carteira += dados_normalizados[ticker] * atributos['peso']
+
+        # Gráfico de Desempenho
+        fig_desempenho, ax_desempenho = plt.subplots(figsize=(12, 6))
+        ax_desempenho.plot(retorno_carteira, label="Carteira Dividendos", color='orange')
+        ax_desempenho.plot(dados_normalizados[TICKER_IBOV], label="Ibovespa", color='blue')
+        
+        ax_desempenho.set_title("Desempenho Histórico da Carteira vs. Ibovespa (Base 100)")
+        ax_desempenho.set_xlabel("Data")
+        ax_desempenho.set_ylabel("Retorno (Base 100)")
+        ax_desempenho.legend()
+        ax_desempenho.grid(True)
+        st.pyplot(fig_desempenho)
+
+        # Resumo de retorno (simplificado)
+        if not retorno_carteira.empty:
+            retorno_carteira_total = (retorno_carteira.iloc[-1] / retorno_carteira.iloc[0] - 1) * 100 if retorno_carteira.iloc[0] != 0 else 0
+            retorno_ibov_total = (dados_normalizados[TICKER_IBOV].iloc[-1] / dados_normalizados[TICKER_IBOV].iloc[0] - 1) * 100 if dados_normalizados[TICKER_IBOV].iloc[0] != 0 else 0
+            st.write(f"**Retorno Total da Carteira no período:** {retorno_carteira_total:.2f}%")
+            st.write(f"**Retorno Total do Ibovespa no período:** {retorno_ibov_total:.2f}%")
+else:
+    st.warning("Não foi possível carregar dados suficientes para calcular o desempenho da carteira.")
+
+# --- Fluxo de Pagamento de Dividendos (Simplificado para o portfólio) ---
+st.subheader("Fluxo de Pagamento de Dividendos da Carteira")
+
+# Este é um cálculo simplificado. Um fluxo real exigiria mais lógica de pesos e datas de pagamento
+# Vamos somar os dividendos históricos de cada ação
+dividendos_combinados = pd.Series(dtype=float)
+with st.spinner("Calculando fluxo de dividendos..."):
+    for ticker in CARTEIRA_ACOES.keys():
+        try:
+            _, _, dividends = buscar_dados_acao(ticker)
+            if not dividends.empty:
+                # Multiplica os dividendos pelo peso da ação na carteira para uma simulação
+                # Isso é uma simplificação, pois o investimento inicial afetaria o valor real
+                weighted_dividends = dividends * CARTEIRA_ACOES[ticker]['peso'] 
+                dividendos_combinados = dividendos_combinados.add(weighted_dividends, fill_value=0)
+        except Exception as e:
+            st.warning(f"Erro ao obter dividendos para {ticker}: {e}")
+
+if not dividendos_combinados.empty:
+    dividendos_combinados_df = dividendos_combinados.to_frame(name='Dividendos Recebidos').reset_index()
+    dividendos_combinados_df.columns = ['Data', 'Dividendos Recebidos']
+    dividendos_combinados_df['Data'] = dividendos_combinados_df['Data'].dt.date # Apenas a data
+    dividendos_combinados_df = dividendos_combinados_df.sort_values(by='Data', ascending=False)
+    st.dataframe(dividendos_combinados_df, use_container_width=True)
+else:
+    st.write("Não há dados de dividendos para esta carteira no período selecionado.")
+
+# --- Disclaimer (Importante!) ---
+st.markdown("---")
+st.subheader("Informações Importantes / Disclaimer")
+st.markdown("""
+* **Este aplicativo é para fins demonstrativos e educacionais apenas.** Não constitui recomendação de investimento.
+* Os dados são obtidos do Yahoo Finance (yfinance) e podem conter imprecisões ou atrasos.
+* **Rentabilidade passada não é garantia de rentabilidade futura.**
+* Sempre consulte um profissional financeiro qualificado antes de tomar decisões de investimento.
+""")
