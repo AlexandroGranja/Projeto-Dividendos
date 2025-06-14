@@ -378,6 +378,23 @@ if not df_carteira.empty:
 else:
     st.warning("Nenhum dado da carteira disponível para sugerir rebalanceamento.")
 
+    # --- Exportar Dados ---
+st.subheader("Exportar Dados da Carteira")
+
+if not df_carteira.empty:
+    # Converte o DataFrame para CSV
+    csv_file = df_carteira_sorted.to_csv(index=False, sep=';', decimal=',') # Usar ; como separador e , como decimal para compatibilidade com Excel BR
+
+    st.download_button(
+        label="Baixar Tabela da Carteira (.csv)",
+        data=csv_file,
+        file_name=f"carteira_dividendos_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        help="Baixa a tabela de composição da carteira com todas as métricas em formato CSV."
+    )
+else:
+    st.info("Nenhum dado da carteira disponível para exportação.")
+
 # --- Função para Gerar Prompt da IA ---
 def gerar_prompt_ia(df_carteira, precos_fechamento, dividend_yields_dict):
     # Formatar os dados da carteira para o prompt da IA
