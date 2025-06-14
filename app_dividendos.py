@@ -87,7 +87,7 @@ def buscar_dados_acao(ticker):
     hoje = datetime.now()
     inicio = hoje - timedelta(days=DIAS_HISTORICO)
     hist = acao.history(start=inicio, end=hoje)
-    dividends = acao.dividends.loc[str(inicio.year):str(hoje.year)]
+    dividends = acao.dividends
     return info, hist, dividends
 
 # --- Carregar dados da carteira ---
